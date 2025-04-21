@@ -102,7 +102,7 @@ def main():
         
         screen.fill((0, 0, 0))
         
-        # Draw color palette
+        # Drow color palette 
         for i, c in enumerate(colors):
             pygame.draw.rect(screen, c, (10 + i*30, 10, 25, 25))
             if c == color:
