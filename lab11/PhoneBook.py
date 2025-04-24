@@ -1,61 +1,60 @@
 import psycopg2
 import csv
-from tabulate import tabulate 
+from tabulate import tabulate
 
-conn = psycopg2.connect(host="localhost", dbname="lab10", user="postgres",
-                        password="1234", port=5432)
-
+conn = psycopg2.connect(
+    host="localhost",
+    dbname="lab10",
+    user="postgres",
+    password="1234",
+    port=5432
+)
 cur = conn.cursor()
 
-cur.execute("""CREATE TABLE IF NOT EXISTS phonebook (
-      user_id SERIAL PRIMARY KEY,
-      name VARCHAR(255) NOT NULL,
-      surname VARCHAR(255) NOT NULL, 
-      phone VARCHAR(255) NOT NULL
-)
-""")
-
 def insert_data():
-    print('Type "csv" or "con" to choose option between uploading csv file or typing from console: ')
-    method = input().lower()
-    if method == "con":
-        name = input("Name: ")
-        surname = input("Surname: ")
-        phone = input("Phone: ")
-        cur.execute("INSERT INTO phonebook (name, surname, phone) VALUES (%s, %s, %s)", (name, surname, phone))
-    elif method == "csv":
-        filepath = input("Enter a file path with proper extension: ")
+    filepath = input("Enter a file path with proper extension: ")
+    try:
         with open(filepath, 'r') as f:
             reader = csv.reader(f)
-            next(reader)  # Skip the header row
+            next(reader)
             for row in reader:
-                cur.execute("INSERT INTO phonebook (name, surname, phone) VALUES (%s, %s, %s)", tuple(row))
+                print(f"Processing row: {row}")  # Печатаем строку для отладки
+                if len(row) == 3:
+                    name, surname, phone = row
+                    cur.execute("SELECT * FROM phonebook WHERE name = %s AND surname = %s", (name, surname))
+                    existing_user = cur.fetchone()
+                    if existing_user:
+                        cur.execute("UPDATE phonebook SET phone = %s WHERE name = %s AND surname = %s", (phone, name, surname))
+                        print(f"Updated phone number for {name} {surname}.")
+                    else:
+                        cur.execute("INSERT INTO phonebook (name, surname, phone) VALUES (%s, %s, %s)", (name, surname, phone))
+                        print(f"Inserted new user: {name} {surname}.")
+                else:
+                    print(f"Skipping invalid row: {row}. Expected 3 columns (name, surname, phone).")
+        conn.commit()
+        print("Data successfully inserted or updated.")
+    except Exception as e:
+        print("Error while inserting data:", e)
 
-def update_data():
-    column = input('Type the name of the column that you want to change: ')
-    value = input(f"Enter {column} that you want to change: ")
-    new_value = input(f"Enter the new {column}: ")
-    cur.execute(f"UPDATE phonebook SET {column} = %s WHERE {column} = %s", (new_value, value))
-    conn.commit()
+def query_data():
+    pattern = input("Enter pattern to search (name, surname or phone): ")
+    cur.execute("SELECT * FROM phonebook WHERE name ILIKE %s OR surname ILIKE %s OR phone ILIKE %s", 
+                (f"%{pattern}%", f"%{pattern}%", f"%{pattern}%"))
+    rows = cur.fetchall()
+    print(tabulate(rows, headers=["ID", "Name", "Surname", "Phone"], tablefmt="pretty"))
 
 def delete_data():
-    phone = input('Type phone number which you want to delete: ')
-    cur.execute("DELETE FROM phonebook WHERE phone = %s", (phone,))
+    info = input("Enter name or phone to delete: ")
+    cur.execute("DELETE FROM phonebook WHERE name = %s OR phone = %s", (info, info))
     conn.commit()
-    
-def query_data():
-    column = input("Type the name of the column which will be used for searching data: ")
-    value = input(f"Type {column} of the user: ")
-    cur.execute(f"SELECT * FROM phonebook WHERE {column} = %s", (value,))
-    rows = cur.fetchall()
-    print(tabulate(rows, headers=["ID", "Name", "Surname", "Phone"]))
+    print("Data deleted.")
 
-def display_data():
-    cur.execute("SELECT * from phonebook;")
+def show_data():
+    cur.execute("SELECT * FROM phonebook")
     rows = cur.fetchall()
-    print(tabulate(rows, headers=["ID", "Name", "Surname", "Phone"], tablefmt='fancy_grid'))
+    print(tabulate(rows, headers=["ID", "Name", "Surname", "Phone"], tablefmt="pretty"))
 
-while True:
+def menu():
     print("""
     List of the commands:
     1. Type "i" or "I" in order to INSERT data to the table.
@@ -66,21 +65,21 @@ while True:
     6. Type "f" or "F" in order to close the program.
     """)
 
-    command = input().lower()
-
-    if command == "i":
+while True:
+    menu()
+    command = input("Enter command: ")
+    if command.lower() == "i":
         insert_data()
-    elif command == "u":
-        update_data()
-    elif command == "d":
-        delete_data()
-    elif command == "q":
+    elif command.lower() == "q":
         query_data()
-    elif command == "s":
-        display_data()
-    elif command == "f":
+    elif command.lower() == "d":
+        delete_data()
+    elif command.lower() == "s":
+        show_data()
+    elif command.lower() == "f":
         break
+    else:
+        print("Wrong command!")
 
-conn.commit()
 cur.close()
 conn.close()
